@@ -11,7 +11,6 @@ def write_json(file_name, data):
     :param data: Tree summary data to write
     :return: None
     """
-    os.chdir("result")
     f = open(file_name + "_clust.summ.json", "w")
     json.dump(data, f)
     f.close()
@@ -47,8 +46,8 @@ class SubCluster:
         self.std_ssm = round_array(self.calc_std_node_ssm())
         self.mean_cnv = round_array(self.calc_mean_node_cnv())
         self.std_cnv = round_array(self.calc_std_node_cnv())
-        self.mean_llh = "%.3f" % self.calc_mean_llh()
-        self.std_llh = "%.4f" % self.calc_std_llh()
+        self.mean_llh = float(str("%.3f" % self.calc_mean_llh()))
+        self.std_llh = float(str("%.4f" % self.calc_std_llh()))
 
     def calc_num_node(self):
         """
@@ -204,10 +203,9 @@ class Tumor:
         self.assignments = assignments
         self.num_clusters = len(set(self.assignments))
         self.clusters = []
-
         for c_num in range(self.num_clusters):
             # Assign all trees by cluster number
-            trees = {k: v for k, v in self.trees.items() if assignments[int(k)] == c_num}
+            trees = {k: self.trees[k] for i, k in enumerate(self.trees) if assignments[i] == c_num}
             self.clusters.append(Cluster(c_num, trees, means[c_num]))
 
         self.summary_file = self.generate_summary_file()
@@ -220,11 +218,14 @@ class Tumor:
         json_output = {}
         for cluster in self.clusters:
             for i, sub_cluster in enumerate(cluster.subclusters):
-                name = str(cluster.name) + chr(i + 97) if (len(cluster.subclusters) > 1) else str(cluster.name)
+                # Switch to fully integer classification until witness can be updated
+                name = str(cluster.name) + str(i) if (len(cluster.subclusters) > 1) else str(cluster.name)
+                #name = str(cluster.name) + chr(i + 97) if (len(cluster.subclusters) > 1) else str(cluster.name)
                 json_output[name] = {
                     "branching_index": cluster.bi,
                     "populations": {},
                     "llh": sub_cluster.mean_llh,
+                    "std_llh": sub_cluster.std_llh,
                     "linearity_index": cluster.li,
                     "structure": eval(sub_cluster.tree_structure),
                     "coclustering_index": cluster.ci
@@ -232,8 +233,11 @@ class Tumor:
                 for node in range(sub_cluster.mean_node):
                     json_output[name]["populations"][str(node)] = {
                         "num_ssms": sub_cluster.mean_ssm[node],
+                        "std_ssms": sub_cluster.std_ssm[node],
                         "num_cnvs": sub_cluster.mean_cnv[node],
-                        "cellular_prevalence": sub_cluster.mean_cp[node]
+                        "std_cnvs": sub_cluster.std_cnv[node],
+                        "cellular_prevalence": [sub_cluster.mean_cp[node]],
+                        "std_cellular_prevalence": sub_cluster.std_cp[node]
                     }
         return {"trees": json_output}
 
@@ -248,10 +252,5 @@ if __name__ == "__main__":
         json_file = open(file, "r")
         tree_sums = json.load(json_file)["trees"]
         json_file.close()
-
         jp = Tumor(tree_sums, assigns, gmm_means)
-        write_json("test.json", jp.summary_file)
-        break
-
-
-
+        write_json("results/" + base, jp.summary_file)
